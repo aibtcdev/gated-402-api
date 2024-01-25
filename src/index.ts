@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { serveStatic } from 'hono/cloudflare-workers';
 
 const app = new Hono();
 
@@ -20,7 +21,20 @@ export interface Env {
 }
 
 app.get('/', (c) => {
-	return c.text('Hello Hono!');
+	return c.text('Welcome to the Gated API example using machine-payable transactions on Stacks.');
 });
+
+app.get('/favicon.ico', serveStatic({ path: 'favicon.ico' }));
+
+// THINKING IT THROUGH
+// we need to know the resource is registered, or error out
+// if the user didn't pay, return 402 with invoice info
+// if the user did pay, return 200 with the resource
+
+// TO KNOW IF USER PAID
+// we need to know the user's address
+// we need to know the resource index (or name)
+// we need to know the target Stacks block height
+// we could use chainhooks and receive events?
 
 export default app;

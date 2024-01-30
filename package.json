@@ -13,6 +13,7 @@
 		"wrangler": "^3.0.0"
 	},
 	"dependencies": {
-		"hono": "^3.12.7"
+		"hono": "^3.12.7",
+		"micro-stacks": "^1.2.1"
 	}
 }

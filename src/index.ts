@@ -5,6 +5,9 @@ import { principalCV, stringUtf8CV } from 'micro-stacks/clarity';
 import { getNetwork } from './utilities';
 import { validateStacksAddress } from 'micro-stacks/crypto';
 
+const CONTRACT_NAME = 'stacks-m2m-v1';
+const CONTRACT_ADDRESS = 'ST17EAYFJ9JDJAQ7RGSE6CTGH90MQH68B3FPR7EKP';
+
 const app = new Hono();
 
 export interface Env {
@@ -38,7 +41,7 @@ app.get('/bitcoin-face', async (c) => {
 
 	// Ensure both parameters are provided
 	if (!resource || !address) {
-		return c.json({ error: 'Missing resourceName or address query parameters' }, 400);
+		return c.json({ error: 'Missing resource or address query parameters' }, 400);
 	}
 
 	// Ensure stacks address is valid
@@ -52,41 +55,54 @@ app.get('/bitcoin-face', async (c) => {
 	}
 
 	// check resource is registered / payment data exists
-	const paymentData = await getRecentPaymentData(resource, address, network);
+	const invoice = await getRecentPaymentData(resource, address, network);
 
-	if (!paymentData.paid) {
+	if (!invoice.paid) {
 		// if not, return invoice with HTTP 402 (Payment Required)
-		return c.json(paymentData, 402);
+		return c.json(invoice, 402);
 	}
 
-	// if so, return resource
-	return c.text('Bitcoin Face');
+	// if so, return a Bitcoin Face
+	if (invoice.invoiceData) {
+		// example: https://bitcoinfaces.xyz/api/get-image?name=whoabuddy.sats
+		const url = new URL('https://bitcoinfaces.xyz/api/get-image');
+		url.searchParams.append('name', invoice.invoiceData.hash);
+		const response = await fetch(url.toString());
+		const svg = await response.text();
+		return c.text(svg, 200, { 'Content-Type': 'image/svg+xml' });
+	} else {
+		return c.text('Unable to generate Bitcoin Face', 500);
+	}
 });
 
-async function getRecentPaymentData(resourceName: string, address: string, network: string) {
+async function getRecentPaymentData(resourceName: string, address: string, network: string): Promise<PaymentData> {
 	// testing with hardcoded address at first
-	const paymentData = await fetchReadOnlyFunction({
-		contractName: 'stacks-m2m-v1',
-		contractAddress: 'ST17EAYFJ9JDJAQ7RGSE6CTGH90MQH68B3FPR7EKP',
+	const invoiceData: InvoiceData | null = await fetchReadOnlyFunction({
+		contractName: CONTRACT_NAME,
+		contractAddress: CONTRACT_ADDRESS,
 		functionName: 'get-recent-payment-data-by-address',
 		functionArgs: [stringUtf8CV(resourceName), principalCV(address)],
 		network: getNetwork(network),
 		senderAddress: address,
 	});
 	// handle unpaid invoice
-	if (paymentData === null) {
+	if (invoiceData === null) {
 		return {
 			paid: false,
-			statusText: `No payment data found for ${address}.`,
-			// TODO: include invoice data in response
-			data: null,
+			status: `No payment data found for ${address}.`,
+			paymentInfo: {
+				contractName: CONTRACT_NAME,
+				contractAddress: CONTRACT_ADDRESS,
+				functionName: 'pay-invoice',
+				functionArgs: [resourceName, 'string-utf8 50', address, 'principal'],
+			},
 		};
 	}
 	// handle paid invoice
 	return {
 		paid: true,
-		statusText: `Payment data found for ${address}.`,
-		data: paymentData,
+		status: `Payment data found for ${address}.`,
+		invoiceData: invoiceData,
 	};
 }
 

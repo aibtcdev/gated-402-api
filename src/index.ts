@@ -2,7 +2,8 @@ import { Hono } from 'hono';
 import { serveStatic } from 'hono/cloudflare-workers';
 import { fetchReadOnlyFunction } from 'micro-stacks/api';
 import { principalCV, stringUtf8CV } from 'micro-stacks/clarity';
-import { StacksMainnet, StacksTestnet } from 'micro-stacks/network';
+import { getNetwork } from './utilities';
+import { validateStacksAddress } from 'micro-stacks/crypto';
 
 const app = new Hono();
 
@@ -30,50 +31,60 @@ app.get('/', (c) => {
 app.get('/favicon.ico', serveStatic({ path: 'favicon.ico' }));
 
 app.get('/bitcoin-face', async (c) => {
-	// check resource is registered / payment data exists
-	const paymentData = await getRecentPaymentData();
+	// Extract resourceName and address from query params
+	const resource = c.req.query('resource');
+	const address = c.req.query('address');
+	const network = c.req.query('network') || 'testnet';
 
-	if (!paymentData.status) {
-		// if not, return invoice
-		// return c.text(`Please pay first: ${JSON.stringify(paymentData)}`);
-		return c.json(paymentData);
+	// Ensure both parameters are provided
+	if (!resource || !address) {
+		return c.json({ error: 'Missing resourceName or address query parameters' }, 400);
+	}
+
+	// Ensure stacks address is valid
+	if (!validateStacksAddress(address)) {
+		return c.json({ error: 'Invalid Stacks address' }, 400);
+	}
+
+	// Ensure network is valid
+	if (network !== 'mainnet' && network !== 'testnet') {
+		return c.json({ error: 'Invalid network, must be "mainnet" or "testnet"' }, 400);
+	}
+
+	// check resource is registered / payment data exists
+	const paymentData = await getRecentPaymentData(resource, address, network);
+
+	if (!paymentData.paid) {
+		// if not, return invoice with HTTP 402 (Payment Required)
+		return c.json(paymentData, 402);
 	}
 
 	// if so, return resource
 	return c.text('Bitcoin Face');
 });
 
-const NETWORK = (network: string) => {
-	switch (network) {
-		case 'mainnet':
-			return new StacksMainnet();
-		case 'testnet':
-			return new StacksTestnet();
-		default:
-			return new StacksTestnet();
-	}
-};
-
-async function getRecentPaymentData() {
+async function getRecentPaymentData(resourceName: string, address: string, network: string) {
 	// testing with hardcoded address at first
-	const address = 'ST2TY3WNDVY1ZSXCPCFYK9KDJJC2TFWYVWNBXNHD4';
 	const paymentData = await fetchReadOnlyFunction({
 		contractName: 'stacks-m2m-v1',
 		contractAddress: 'ST17EAYFJ9JDJAQ7RGSE6CTGH90MQH68B3FPR7EKP',
 		functionName: 'get-recent-payment-data-by-address',
-		functionArgs: [stringUtf8CV('Bitcoin Face'), principalCV(address)],
-		network: NETWORK('testnet'),
+		functionArgs: [stringUtf8CV(resourceName), principalCV(address)],
+		network: getNetwork(network),
 		senderAddress: address,
 	});
+	// handle unpaid invoice
 	if (paymentData === null) {
 		return {
-			status: false,
+			paid: false,
 			statusText: `No payment data found for ${address}.`,
+			// TODO: include invoice data in response
 			data: null,
 		};
 	}
+	// handle paid invoice
 	return {
-		status: true,
+		paid: true,
 		statusText: `Payment data found for ${address}.`,
 		data: paymentData,
 	};

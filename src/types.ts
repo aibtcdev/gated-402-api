@@ -8,6 +8,7 @@ type UserData = {
 
 type ResourceData = {
 	createdAt: number;
+	enabled: boolean;
 	name: string;
 	description: string;
 	price: number;
@@ -18,7 +19,6 @@ type ResourceData = {
 type InvoiceData = {
 	amount: number;
 	createdAt: number;
-	hash: string;
 	userIndex: number;
 	resourceName: string;
 	resourceIndex: number;

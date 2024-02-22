@@ -5,8 +5,8 @@ import { principalCV, stringUtf8CV } from 'micro-stacks/clarity';
 import { getNetwork } from './utilities';
 import { validateStacksAddress } from 'micro-stacks/crypto';
 
-const CONTRACT_NAME = 'stacks-m2m-v1';
-const CONTRACT_ADDRESS = 'ST17EAYFJ9JDJAQ7RGSE6CTGH90MQH68B3FPR7EKP';
+const CONTRACT_NAME = 'stacks-m2m-v2';
+const CONTRACT_ADDRESS = 'ST2HQ5J6RP8HSQE9KKGWCHW9PT9SVE4TDGBZQ3EKR';
 
 const app = new Hono();
 
@@ -66,7 +66,8 @@ app.get('/bitcoin-face', async (c) => {
 	if (invoice.invoiceData) {
 		// example: https://bitcoinfaces.xyz/api/get-image?name=whoabuddy.sats
 		const url = new URL('https://bitcoinfaces.xyz/api/get-image');
-		url.searchParams.append('name', invoice.invoiceData.hash);
+		const name = `${CONTRACT_ADDRESS}.${CONTRACT_NAME}.${invoice.invoiceData.resourceName}.${invoice.invoiceData.userIndex}`;
+		url.searchParams.append('name', name);
 		const response = await fetch(url.toString());
 		const svg = await response.text();
 		return c.text(svg, 200, { 'Content-Type': 'image/svg+xml' });
@@ -93,7 +94,7 @@ async function getRecentPaymentData(resourceName: string, address: string, netwo
 			paymentInfo: {
 				contractName: CONTRACT_NAME,
 				contractAddress: CONTRACT_ADDRESS,
-				functionName: 'pay-invoice',
+				functionName: 'pay-invoice-by-resource-name',
 				functionArgs: [resourceName, 'string-utf8 50', address, 'principal'],
 			},
 		};

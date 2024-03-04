@@ -1,7 +1,7 @@
 name = "gated-api"
 main = "src/index.ts"
 compatibility_date = "2024-01-17"
-routes = [{ pattern = "api.stacksm2m.com", custom_domain = true }]
+routes = [{ pattern = "api.aibtc.dev", custom_domain = true }]
 
 [site]
 bucket = "./static"

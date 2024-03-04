@@ -4,6 +4,8 @@ import { fetchReadOnlyFunction } from 'micro-stacks/api';
 import { principalCV, stringUtf8CV } from 'micro-stacks/clarity';
 import { getNetwork } from './utilities';
 import { validateStacksAddress } from 'micro-stacks/crypto';
+// @ts-ignore required for Cloudflare Workers but not found locally
+import manifest from '__STATIC_CONTENT_MANIFEST';
 
 const CONTRACT_NAME = 'stacks-m2m-v2';
 const CONTRACT_ADDRESS = 'ST2HQ5J6RP8HSQE9KKGWCHW9PT9SVE4TDGBZQ3EKR';
@@ -31,10 +33,10 @@ app.get('/', (c) => {
 	return c.text('Welcome to the Gated API example using HTTP 402 for invoicing and payment verification through Stacks smart contracts.');
 });
 
-app.get('/favicon.ico', serveStatic({ path: 'favicon.ico' }));
-app.get('/favicon-16x16.png', serveStatic({ path: 'favicon-16x16.png' }));
-app.get('/favicon-32x32.png', serveStatic({ path: 'favicon-32x32.png' }));
-app.get('/favicon-96x96.png', serveStatic({ path: 'favicon-96x96.png' }));
+app.get('/favicon.ico', serveStatic({ path: 'favicon.ico', manifest }));
+app.get('/favicon-16x16.png', serveStatic({ path: 'favicon-16x16.png', manifest }));
+app.get('/favicon-32x32.png', serveStatic({ path: 'favicon-32x32.png', manifest }));
+app.get('/favicon-96x96.png', serveStatic({ path: 'favicon-96x96.png', manifest }));
 
 app.get('/bitcoin-face', async (c) => {
 	// Extract resourceName and address from query params

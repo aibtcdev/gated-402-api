@@ -13,7 +13,7 @@
 		"wrangler": "^3.30.1"
 	},
 	"dependencies": {
-		"hono": "^4.0.9",
-		"micro-stacks": "^1.2.1"
+		"@stacks/transactions": "^6.12.0",
+		"hono": "^4.0.9"
 	}
 }

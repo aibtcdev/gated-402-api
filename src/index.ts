@@ -1,11 +1,9 @@
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/cloudflare-workers';
-import { fetchReadOnlyFunction } from 'micro-stacks/api';
-import { principalCV, stringUtf8CV } from 'micro-stacks/clarity';
 import { getNetwork } from './utilities';
-import { validateStacksAddress } from 'micro-stacks/crypto';
 // @ts-ignore required for Cloudflare Workers but not found locally
 import manifest from '__STATIC_CONTENT_MANIFEST';
+import { Cl, callReadOnlyFunction, cvToJSON, cvToValue, validateStacksAddress } from '@stacks/transactions';
 
 const CONTRACT_NAME = 'stacks-m2m-v2';
 const CONTRACT_ADDRESS = 'ST2HQ5J6RP8HSQE9KKGWCHW9PT9SVE4TDGBZQ3EKR';
@@ -71,7 +69,7 @@ app.get('/bitcoin-face', async (c) => {
 	if (invoice.invoiceData) {
 		// example: https://bitcoinfaces.xyz/api/get-image?name=whoabuddy.sats
 		const url = new URL('https://bitcoinfaces.xyz/api/get-image');
-		const name = `${CONTRACT_ADDRESS}.${CONTRACT_NAME}.${invoice.invoiceData.resourceName}.${invoice.invoiceData.userIndex}`;
+		const name = `${CONTRACT_ADDRESS}.${CONTRACT_NAME}.${invoice.invoiceData.resourceName}.${invoice.invoiceData.userIndex}.${invoice.invoiceData.createdAt}`;
 		url.searchParams.append('name', name);
 		const response = await fetch(url.toString());
 		const svg = await response.text();
@@ -83,16 +81,20 @@ app.get('/bitcoin-face', async (c) => {
 
 async function getRecentPaymentData(resourceName: string, address: string, network: string): Promise<PaymentData> {
 	// testing with hardcoded address at first
-	const invoiceData: InvoiceData | null = await fetchReadOnlyFunction({
+	const invoiceDataCV = await callReadOnlyFunction({
 		contractName: CONTRACT_NAME,
 		contractAddress: CONTRACT_ADDRESS,
 		functionName: 'get-recent-payment-data-by-address',
-		functionArgs: [stringUtf8CV(resourceName), principalCV(address)],
+		functionArgs: [Cl.stringUtf8(resourceName), Cl.principal(address)],
 		network: getNetwork(network),
 		senderAddress: address,
 	});
+
 	// handle unpaid invoice
-	if (invoiceData === null) {
+	// probably overkill but checks two things
+	// 1. is the ClarityValue type 9 (none)
+	// 2. is the value null (which is the case with type 9 / none)
+	if (invoiceDataCV.type === 9 || cvToJSON(invoiceDataCV).value === null) {
 		return {
 			paid: false,
 			status: `No payment data found for ${address}.`,
@@ -104,6 +106,45 @@ async function getRecentPaymentData(resourceName: string, address: string, netwo
 			},
 		};
 	}
+
+	/* sample returned data from the contract
+		{
+			type: 10,
+			value: {
+				type: 12,
+				data: {
+					amount: { type: 'uint', value: '1000' },
+					createdAt: { type: 'uint', value: '148918' },
+					resourceIndex: { type: 'uint', value: '1' },
+					resourceName: { type: '(string-utf8 12)', value: 'bitcoin-face' },
+					userIndex: { type: 'uint', value: '1' }
+				}
+			}
+		}
+	*/
+
+	// convert ClarityValue to JSON and get nested value
+	const invoiceDataCVValue = cvToJSON(invoiceDataCV).value.value;
+
+	/* shape of object after conversion
+		invoiceDataCVValueValue {
+			amount: { type: 'uint', value: '1000' },
+			createdAt: { type: 'uint', value: '148918' },
+			resourceIndex: { type: 'uint', value: '1' },
+			resourceName: { type: '(string-utf8 12)', value: 'bitcoin-face' },
+			userIndex: { type: 'uint', value: '1' }
+		}
+	*/
+
+	// create InvoiceData object from Clarity values
+	const invoiceData: InvoiceData = {
+		amount: invoiceDataCVValue.amount.value,
+		createdAt: invoiceDataCVValue.createdAt.value,
+		resourceIndex: invoiceDataCVValue.resourceIndex.value,
+		resourceName: invoiceDataCVValue.resourceName.value,
+		userIndex: invoiceDataCVValue.userIndex.value,
+	};
+
 	// handle paid invoice
 	return {
 		paid: true,

@@ -28,10 +28,13 @@ export interface Env {
 }
 
 app.get('/', (c) => {
-	return c.text('Welcome to the Gated API example using machine-payable transactions on Stacks.');
+	return c.text('Welcome to the Gated API example using HTTP 402 for invoicing and payment verification through Stacks smart contracts.');
 });
 
 app.get('/favicon.ico', serveStatic({ path: 'favicon.ico' }));
+app.get('/favicon-16x16.png', serveStatic({ path: 'favicon-16x16.png' }));
+app.get('/favicon-32x32.png', serveStatic({ path: 'favicon-32x32.png' }));
+app.get('/favicon-96x96.png', serveStatic({ path: 'favicon-96x96.png' }));
 
 app.get('/bitcoin-face', async (c) => {
 	// Extract resourceName and address from query params

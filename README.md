@@ -26,10 +26,16 @@ Query parameters:
 - resource (req): the name of the resource in the smart contract
 - network (opt): the Stacks network to return data from ("mainnet" or "testnet", default: "testnet")
 
-Example with curl:
+Example with curl for local development:
 
 ```bash
 curl -X GET -H "X-Stacks-SignedMessageData: 424b7c7d4faf0dc3edb5e3ce686341621e9305fdd00434dd15a1254a9ce3a60d3ed5def54e9d588a1d12e499411c42af8f897c497aeb5ff4566cec18afc0052500" "http://localhost:8787/bitcoin-face?resource=bitcoin-face&address=ST2HQ5J6RP8HSQE9KKGWCHW9PT9SVE4TDGBZQ3EKR"
+```
+
+Example with curl with hosted API:
+
+```bash
+curl -X GET -H "X-Stacks-SignedMessageData: 424b7c7d4faf0dc3edb5e3ce686341621e9305fdd00434dd15a1254a9ce3a60d3ed5def54e9d588a1d12e499411c42af8f897c497aeb5ff4566cec18afc0052500" "https://api.aibtc.dev/bitcoin-face?resource=bitcoin-face&address=ST2HQ5J6RP8HSQE9KKGWCHW9PT9SVE4TDGBZQ3EKR"
 ```
 
 ## Development

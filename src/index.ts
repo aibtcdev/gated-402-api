@@ -1,9 +1,24 @@
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/cloudflare-workers';
-import { getNetwork } from './utilities';
+import { sha256 } from '@noble/hashes/sha256';
+import { getNetwork, getTxVersion } from './utilities';
 // @ts-ignore required for Cloudflare Workers but not found locally
 import manifest from '__STATIC_CONTENT_MANIFEST';
-import { Cl, callReadOnlyFunction, cvToJSON, cvToValue, validateStacksAddress } from '@stacks/transactions';
+import { bytesToHex } from '@stacks/common';
+import {
+	Cl,
+	StructuredDataSignature,
+	callReadOnlyFunction,
+	cvToJSON,
+	cvToValue,
+	encodeStructuredData,
+	getAddressFromPublicKey,
+	publicKeyFromSignatureRsv,
+	stringAsciiCV,
+	tupleCV,
+	uintCV,
+	validateStacksAddress,
+} from '@stacks/transactions';
 
 const CONTRACT_NAME = 'stacks-m2m-v2';
 const CONTRACT_ADDRESS = 'ST2HQ5J6RP8HSQE9KKGWCHW9PT9SVE4TDGBZQ3EKR';
@@ -37,24 +52,67 @@ app.get('/favicon-32x32.png', serveStatic({ path: 'favicon-32x32.png', manifest 
 app.get('/favicon-96x96.png', serveStatic({ path: 'favicon-96x96.png', manifest }));
 
 app.get('/bitcoin-face', async (c) => {
-	// Extract resourceName and address from query params
-	const resource = c.req.query('resource');
+	// Check for the X-Stacks-SignedMessageData header
+	const signedMessageData = c.req.header('X-Stacks-SignedMessageData');
+	if (!signedMessageData) {
+		return c.json({ error: 'Missing X-Stacks-SignedMessageData header' }, 400);
+	}
+
+	// Check for the address query parameter
 	const address = c.req.query('address');
+	if (!address || !validateStacksAddress(address)) {
+		return c.json({ error: 'Missing address query parameter or incorrect format specified' }, 400);
+	}
+
+	// Check for the resource query parameter
+	const resource = c.req.query('resource');
+	if (!resource) {
+		return c.json({ error: 'Missing resource query parameter' }, 400);
+	}
+
+	// Check for the network query parameter
 	const network = c.req.query('network') || 'testnet';
-
-	// Ensure both parameters are provided
-	if (!resource || !address) {
-		return c.json({ error: 'Missing resource or address query parameters' }, 400);
-	}
-
-	// Ensure stacks address is valid
-	if (!validateStacksAddress(address)) {
-		return c.json({ error: 'Invalid Stacks address' }, 400);
-	}
-
-	// Ensure network is valid
 	if (network !== 'mainnet' && network !== 'testnet') {
 		return c.json({ error: 'Invalid network, must be "mainnet" or "testnet"' }, 400);
+	}
+
+	// get network object from network param
+	const networkObj = getNetwork(network);
+	// get tx version object from network param
+	const txVersion = getTxVersion(network);
+
+	// create domain object, used for structured signed message
+	// TODO: how to make sure this matches client side?
+	const domain = tupleCV({
+		name: stringAsciiCV('aibtcdev'),
+		version: stringAsciiCV('0.0.2'),
+		'chain-id': uintCV(networkObj.chainId),
+	});
+
+	// create a structured signed message from the data
+	// TODO: pass the object in the header instead?
+	const signedMessage: StructuredDataSignature = {
+		type: 10,
+		data: signedMessageData,
+	};
+
+	// encode the address as the expected signed message
+	// TODO: how to handle knowing the expected message?
+	const expectedMessage = encodeStructuredData({
+		message: stringAsciiCV(address),
+		domain,
+	});
+	const expectedMessageHashed = sha256(expectedMessage);
+
+	// get the public key from the signed message
+	const publicKeyFromSignature = publicKeyFromSignatureRsv(bytesToHex(expectedMessageHashed), signedMessage);
+
+	// get the address from the public key
+	const addressFromSignature = getAddressFromPublicKey(publicKeyFromSignature, txVersion);
+
+	// verify the address param matches address from signature
+	if (address !== addressFromSignature) {
+		return c.json({ error: 'Address provided does not match signature' }, 400);
 	}
 
 	// check resource is registered / payment data exists

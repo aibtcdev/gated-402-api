@@ -1,3 +1,5 @@
+> **This repository has been archived.** Development has moved to [x402-api](https://github.com/aibtcdev/x402-api).
+
 <img src="https://aibtc.dev/logos/aibtcdev-primary-logo-black-wide-1000px.png" alt="AIBTC Working Group Logo" style="width: 100%; max-width: 1000px; display: block; margin: 1rem auto;" />
 
 # AIBTC Gated 402 API
